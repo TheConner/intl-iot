@@ -16,7 +16,8 @@ import subprocess
 import magic
 from joblib import Parallel, delayed
 from collections import Counter
-
+import nest_asyncio
+nest_asyncio.apply()
 
 parser = argparse.ArgumentParser(description='Analyse extracted files from PCAP files')
 
@@ -39,27 +40,22 @@ if (extraction_data == None):
 device_file_info = []
 raw_file_infos = []
 
-def printProgressBar (iteration, total, prefix = '', suffix = '', decimals = 1, length = 100, fill = '█', printEnd = "\r"):
-    """
-    Call in a loop to create terminal progress bar
-    @params:
-        iteration   - Required  : current iteration (Int)
-        total       - Required  : total iterations (Int)
-        prefix      - Optional  : prefix string (Str)
-        suffix      - Optional  : suffix string (Str)
-        decimals    - Optional  : positive number of decimals in percent complete (Int)
-        length      - Optional  : character length of bar (Int)
-        fill        - Optional  : bar fill character (Str)
-        printEnd    - Optional  : end character (e.g. "\r", "\r\n") (Str)
-    """
-    print('\r')
-    percent = ("{0:." + str(decimals) + "f}").format(100 * (iteration / float(total)))
-    filledLength = int(length * iteration // total)
-    bar = fill * filledLength + '-' * (length - filledLength)
-    print(f'\r{prefix} |{bar}| {percent}% {suffix}', end = printEnd)
-    # Print New Line on Complete
-    if iteration == total: 
-        print()
+def extract_packets_by_filter(packet_file, filter):
+    collected_packets = []
+    
+    packets = pyshark.FileCapture(packet_file, display_filter=filter)
+    err_count = 0
+
+    for pkt in packets:
+        try:
+            layer = pkt['SSL'].__dict__['_all_fields']
+            collected_packets.append(layer)
+        except KeyError:
+            #print("No SSL layer")
+            err_count += 1
+    
+    packets.close()
+    return collected_packets
 
 def flatten(t):
     return [item for sublist in t for item in sublist]
@@ -67,12 +63,15 @@ def flatten(t):
 def search_strs_in_file(file, strs):
     found_strs = {}
     with open(file, 'r') as f:
-        content = f.read().lower()
+        try:
+            content = f.read().lower()
 
-        for str in strs:
-            found_strs[str] = str.lower() in content
+            for str in strs:
+                found_strs[str] = str.lower() in content
 
-        return found_strs
+            return found_strs
+        except Exception:
+            return found_strs
 
 def metadata_extract(files):
     mime = magic.Magic(mime=True)
@@ -85,9 +84,9 @@ def metadata_extract(files):
         file_magic = magic.from_file(file_path)
 
         update_strs = {}
-        if ('text' in file_magic or 'json' in file_magic or 'xml' in 'file_magic' or 'plain' in file_magic or 'html' in file_magic):
+        #if ('text' in file_magic or 'json' in file_magic or 'xml' in 'file_magic' or 'plain' in file_magic or 'html' in file_magic):
             # Extract if the file contains update / upgrade / etc
-            update_strs = search_strs_in_file(file_path, ['update', 'upgrade', 'firmware', 'software', 'download'])
+        update_strs = search_strs_in_file(file_path, ['update', 'upgrade', 'firmware', 'software', 'download'])
 
         metadata_labels.append({
             'file': file_path,
@@ -100,14 +99,20 @@ def metadata_extract(files):
 def process_device(metadata, walk_dir):
     file_info_for_device = {
         'uuid': metadata['uuid'],
-        'file_infos': []
+        'file_infos': [],
+        'tls_client_hellos': [],
+        'tls_server_hellos': []
     }
+
+    pcap = metadata['pcap']
     
     all_targets = []
     for root, subdirs, files in os.walk(os.path.join(walk_dir, metadata['uuid'])):
         for file in files:
             all_targets.append(os.path.join(root,file))
     results = metadata_extract(all_targets)
+    
+
     if (len(results) != 0):
         for result in results:
             file_info_for_device['file_infos'].append(result)
