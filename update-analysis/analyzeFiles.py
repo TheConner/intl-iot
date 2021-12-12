@@ -49,6 +49,7 @@ def extract_packets_by_filter(packet_file, filter):
     for pkt in packets:
         try:
             layer = pkt['SSL'].__dict__['_all_fields']
+            #print(layer)
             collected_packets.append(layer)
         except KeyError:
             #print("No SSL layer")
@@ -99,12 +100,8 @@ def metadata_extract(files):
 def process_device(metadata, walk_dir):
     file_info_for_device = {
         'uuid': metadata['uuid'],
-        'file_infos': [],
-        'tls_client_hellos': [],
-        'tls_server_hellos': []
+        'file_infos': []
     }
-
-    pcap = metadata['pcap']
     
     all_targets = []
     for root, subdirs, files in os.walk(os.path.join(walk_dir, metadata['uuid'])):

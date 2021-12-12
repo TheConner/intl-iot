@@ -18,19 +18,22 @@ import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description='Generate Charts')
 
-parser.add_argument('input', type=str, help='Input json')
-parser.add_argument('inputmeta', type=str, help='Input device metadata')
+PICKLE_FILE_CONST = "file_metadata.pickle"
+ANAL_RESULTS_CONST = "bin_results.json"
+
+parser.add_argument('input', type=str, help='Input dir')
+#parser.add_argument('inputmeta', type=str, help='Input device metadata')
 parser.add_argument('output', type=str, help='Output dir')
 
 args = parser.parse_args()
 input_file = args.input
-device_metadata_file = args.inputmeta
+#device_metadata_file = args.inputmeta
 
-with open(input_file, 'r') as f:
+with open(os.path.join(input_file, ANAL_RESULTS_CONST), 'r') as f:
     data = json.load(f)
     print("Loaded packet JSON")
 
-with open(device_metadata_file, 'rb') as f:
+with open(os.path.join(input_file, PICKLE_FILE_CONST), 'rb') as f:
     device_metadata = pickle.load(f)
     print("Loaded metadata pickle")
 
@@ -90,5 +93,11 @@ def generate_update_endpoint_chart(data):
     plt.bar(update_meta_counts_keys, update_meta_counts_values)
     plt.savefig('df_meta_update_counts.png')
 
+def generate_tls_charts(data):
+    for device in data:
+        DEVICE_UUID = device.get('uuid')
+        device_metadata=get_device_by_uuid(DEVICE_UUID)
+        device_label = device_metadata['device']
+
 #generate_mime_pie(data['results'])
-generate_update_endpoint_chart(data['results'])
+#generate_update_endpoint_chart(data['results'])
